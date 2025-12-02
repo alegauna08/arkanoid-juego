@@ -1,0 +1,13 @@
+# Dependencias (si en el futuro agregas algo)
+node_modules/
+
+# Archivos de build (si usas herramientas luego)
+dist/
+build/
+
+# Archivos del sistema
+.DS_Store
+Thumbs.db
+
+# Archivos de Vercel
+.vercel/
