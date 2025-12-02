@@ -3,10 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Arkanoid - Breakout Game</title>
+    <title>Arkanoid - Breakout Game Avanzado</title>
     <style>
-        /* ---- (todo tu CSS original queda igual) ---- */
-
+        /* Estilos CSS */
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
             display: flex; justify-content: center; align-items: center;
@@ -14,7 +13,7 @@
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             font-family: Arial, sans-serif;
         }
-        .game-container { text-align: center; }
+        .game-container { text-align: center; position: relative; }
         h1 {
             color: white; margin-bottom: 20px;
             text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
@@ -27,7 +26,7 @@
             display: block;
             box-shadow: 0 10px 30px rgba(0,0,0,0.3);
             margin-bottom: 20px;
-            touch-action: none;
+            touch-action: none; /* Previene el comportamiento por defecto de 'touch' */
         }
         .info {
             color: white; font-size: 18px; margin-bottom: 10px;
@@ -92,11 +91,18 @@
             -webkit-tap-highlight-color: transparent;
             touch-action:none;
         }
+        
+        /* FIX MÓVIL: Evita superposición de info con controles */
         @media (max-width:768px) {
             .controls{ display:none; }
             .canvas-wrap{ width:95vw; }
             .level-display{ top:12px; right:12px; padding:8px 12px; }
             .mobile-controls{ display:flex; }
+            .game-container > .info {
+                /* Crea un margen inferior suficiente para los controles fijos (altura del botón 72px + padding 12px) */
+                margin-bottom: 84px; 
+                font-size: 16px;
+            }
             .screen-content h1{ font-size:40px; }
             .screen-content p{ font-size:18px; }
         }
@@ -105,7 +111,6 @@
 
 <body>
 
-    <!-- Contenido del juego (idéntico al original) -->
     <div class="game-container">
         <h1>🎮 Arkanoid</h1>
 
@@ -132,7 +137,6 @@
         </div>
     </div>
 
-    <!-- Pantallas de fin / victoria -->
     <div id="winScreen">
         <div class="screen-content">
             <h1>🎉 ¡VICTORIA! 🎉</h1>
@@ -159,495 +163,506 @@
         </div>
     </div>
 
-    <!-- SCRIPT del juego (idéntico al original) -->
     <script>
         const canvas = document.querySelector('canvas');
         const ctx = canvas.getContext('2d');
-        
-        // Base sizes for responsive scaling 
+
+        // --- Configuración base (para escalado) ---
         const BASE_CANVAS_WIDTH = 480;
-        
-        const BASE_CANVAS_HEIGHT = 400; const BASE_BALL_RADIUS = 8; const BASE_PADDLE_WIDTH = 75;
-        const BASE_PADDLE_HEIGHT = 12; const BASE_PADDLE_BOTTOM = 10; 
-        
-        // distance from bottom 
-        const BASE_BRICK_WIDTH = 70; 
-        
-        const BASE_BRICK_HEIGHT = 15;
-        
-        // Dynamic sizes 
+        const BASE_CANVAS_HEIGHT = 400;
+        const BASE_BALL_RADIUS = 8;
+        const BASE_PADDLE_WIDTH = 75;
+        const BASE_PADDLE_HEIGHT = 12;
+        const BASE_PADDLE_BOTTOM = 10;
+        const BASE_PADDLE_SPEED = 6;
+        const maxBallSpeed = 7;
+
+        // --- Variables dinámicas y de estado ---
         let dpr = window.devicePixelRatio || 1;
-        let logicalWidth = BASE_CANVAS_WIDTH; let logicalHeight = BASE_CANVAS_HEIGHT;
-        let scale = 1; let ballRadius = BASE_BALL_RADIUS;
-        let ballX,ballY, ballDX, ballDY, ballSpeed;
-        let maxBallSpeed = 7;
+        let logicalWidth = BASE_CANVAS_WIDTH;
+        let logicalHeight = BASE_CANVAS_HEIGHT;
+        let scale = 1;
+        let ballRadius = BASE_BALL_RADIUS;
+        let ballX, ballY, ballDX, ballDY, ballSpeed;
         let paddleHeight, paddleWidth, paddleX, paddleY;
-        const BASE_PADDLE_SPEED = 6; 
-        // base movement speed 
-        let paddleSpeed = BASE_PADDLE_SPEED * scale; 
-        // actual speed updated on resize 
-        let rightPressed = false; 
-        let leftPressed = false; 
-        let isPaused = false; 
-        let isGameRunning = true; 
-        let score = 0; 
-        let lives = 3; 
-        let currentLevel = 1; 
-        // Setup canvas sizing and initial physics positions 
-        function resizeCanvas() { 
-            dpr = window.devicePixelRatio || 1; 
-            // logical width: use 95% of window or limit to 720 or base with 
-            logicalWidth = Math.min(window.innerWidth * 0.95, 720); 
-            // keep some minimal width on desktop 
-            logicalWidth = Math.max(logicalWidth, 320); 
-            scale = logicalWidth / BASE_CANVAS_WIDTH; 
-            logicalHeight = Math.round(BASE_CANVAS_HEIGHT * scale); 
-            // Set CSS visual size for canvas 
-            canvas.style.width = logicalWidth + 'px'; 
-            canvas.style.height = logicalHeight + 'px'; 
-            // Set actual canvas resolution scaled by DPR 
-            canvas.width = Math.round(logicalWidth * dpr); 
-            canvas.height = Math.round(logicalHeight * dpr); 
-            ctx.setTransform(dpr, 0, 0, dpr, 0, 0); 
-            // Recalc dynamic sizes 
-            ballRadius = Math.max(4, BASE_BALL_RADIUS * scale); 
-            paddleWidth = Math.max(40, BASE_PADDLE_WIDTH * scale); 
-            paddleHeight = Math.max(8, BASE_PADDLE_HEIGHT * scale); 
-            paddleSpeed = Math.max(2, BASE_PADDLE_SPEED * scale); 
-            paddleY = logicalHeight - paddleHeight - BASE_PADDLE_BOTTOM * scale; 
-            // Initialize some positions sensibly
-            if (!ballX || isNaN(ballX)) { 
-                ballX = logicalWidth / 2; 
-            } if (!ballY || isNaN(ballY)) { 
-                ballY = logicalHeight - 60 * scale; 
+        let paddleSpeed;
+        let rightPressed = false;
+        let leftPressed = false;
+        let isPaused = false;
+        let isGameRunning = true;
+        let score = 0;
+        let lives = 3;
+        let currentLevel = 1;
+
+        // --- Configuración de Niveles ---
+        const levelConfigs = {
+            1: { rows: 4, cols: 6, brickHealth: 1, speedMultiplier: 1 },
+            2: { rows: 5, cols: 7, brickHealth: 1, speedMultiplier: 1.15 },
+            3: { rows: 5, cols: 8, brickHealth: 2, speedMultiplier: 1.3 },
+            4: { rows: 6, cols: 8, brickHealth: 2, speedMultiplier: 1.45 },
+            5: { rows: 6, cols: 9, brickHealth: 3, speedMultiplier: 1.6 }
+        };
+
+        // --- Ladrillos ---
+        let brickRowCount, brickColumnCount;
+        let brickPadding = 5;
+        const brickOffsetTop = 30;
+        const brickOffsetLeft = 10;
+        let brickWidth;
+        let brickHeight;
+        let bricks = [];
+        let totalBricks = 0;
+        let bricksDestroyed = 0;
+
+        // --- Funciones de Inicialización/Escalado ---
+        function resizeCanvas() {
+            dpr = window.devicePixelRatio || 1;
+            logicalWidth = Math.min(window.innerWidth * 0.95, 720);
+            logicalWidth = Math.max(logicalWidth, 320);
+            scale = logicalWidth / BASE_CANVAS_WIDTH;
+            logicalHeight = Math.round(BASE_CANVAS_HEIGHT * scale);
+            canvas.style.width = logicalWidth + 'px';
+            canvas.style.height = logicalHeight + 'px';
+            canvas.width = Math.round(logicalWidth * dpr);
+            canvas.height = Math.round(logicalHeight * dpr);
+            ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+            ballRadius = Math.max(4, BASE_BALL_RADIUS * scale);
+            paddleWidth = Math.max(40, BASE_PADDLE_WIDTH * scale);
+            paddleHeight = Math.max(8, BASE_PADDLE_HEIGHT * scale);
+            paddleSpeed = Math.max(2, BASE_PADDLE_SPEED * scale);
+            paddleY = logicalHeight - paddleHeight - BASE_PADDLE_BOTTOM * scale;
+
+            if (typeof ballX === 'undefined' || isNaN(ballX)) ballX = logicalWidth / 2;
+            if (typeof ballY === 'undefined' || isNaN(ballY)) ballY = logicalHeight - 60 * scale;
+            if (typeof paddleX === 'undefined' || isNaN(paddleX)) {
+                paddleX = (logicalWidth - paddleWidth) / 2;
+            } else {
+                paddleX = Math.min(Math.max(paddleX, 0), logicalWidth - paddleWidth);
             }
-            // Clamp paddle to center if out of view 
-            paddleX = Math.min(Math.max(paddleX || (logicalWidth - paddleWidth) / 2, 0), logicalWidth - paddleWidth); 
-            // Adjust bricks sizes each resize (they use brickWidth and height vars) 
-        } 
-        // Compute dynamic brick sizes before drawing bricks 
-        function computeBrickSizes() { 
-            const config = levelConfigs[currentLevel] || levelConfigs[5]; 
-            // We'll compute brickWidth so that they align with the canvas width 
-            const paddingScaled = Math.round(brickPadding * scale); 
-            const offsetLeftScaled = Math.round(brickOffsetLeft * scale); 
-            const totalPadding = (config.cols - 1) * paddingScaled + offsetLeftScaled * 2; 
-            let dynamicBrickWidth = Math.floor((logicalWidth - totalPadding) / config.cols); 
-            dynamicBrickWidth = Math.max(30, dynamicBrickWidth); 
-            // min size 
-            var dynamicBrickHeight = Math.max(10, Math.round(BASE_BRICK_HEIGHT * scale)); 
-            return { dynamicBrickWidth, dynamicBrickHeight }; 
-        } 
-        // Initialize with resize 
-        resizeCanvas(); 
-        window.addEventListener('resize', () => { 
-            const prevLogicalWidth = logicalWidth; 
-            resizeCanvas(); 
-            // reposition objects after resize 
-            resetBall(); 
-            initBricks(); 
-        }); 
-        // Configuración de niveles 
-        const levelConfigs = { 
-            1: { rows: 4, cols: 6, brickHealth: 1, speedMultiplier: 1 }, 
-            2: { rows: 5, cols: 7, brickHealth: 1, speedMultiplier: 1.15 }, 
-            3: { rows: 5, cols: 8, brickHealth: 2, speedMultiplier: 1.3 }, 
-            4: { rows: 6, cols: 8, brickHealth: 2, speedMultiplier: 1.45 }, 
-            5: { rows: 6, cols: 9, brickHealth: 3, speedMultiplier: 1.6 } 
-        }; 
-        // Sistema de ladrillos 
-        let brickRowCount = 4; 
-        let brickColumnCount = 6; 
-        let brickPadding = 5; 
-        // we'll use computed dynamic values in draw 
-        const brickOffsetTop = 30; 
-        // relative to base, will be scaled in draw 
-        const brickOffsetLeft = 10; 
-        // relative to base, will be scaled in draw 
-        let brickWidth = BASE_BRICK_WIDTH; 
-        let brickHeight = BASE_BRICK_HEIGHT; 
-        let bricks = []; 
-        let totalBricks = 0; 
-        let bricksDestroyed = 0; 
-        // Inicializar ladrillos según el nivel 
-        function initBricks() { 
-            const config = levelConfigs[currentLevel] || levelConfigs[5]; 
-            brickRowCount = config.rows; 
-            brickColumnCount = config.cols; 
-            bricks = []; totalBricks = 0; 
-            bricksDestroyed = 0; 
-            const sizes = computeBrickSizes(); 
-            brickWidth = sizes.dynamicBrickWidth; 
-            brickHeight = sizes.dynamicBrickHeight; 
-            const offsetTopScaled = Math.round(brickOffsetTop * scale); 
-            const offsetLeftScaled = Math.round(brickOffsetLeft * scale); 
-            for (let row = 0; row < brickRowCount; row++) { 
-                bricks[row] = []; 
-                for (let col = 0; col < brickColumnCount; col++) { 
-                    bricks[row][col] = { 
-                        x: 0,
-                        y: 0,
+        }
+
+        function computeBrickSizes() {
+            const config = levelConfigs[currentLevel] || levelConfigs[5];
+            const paddingScaled = Math.round(brickPadding * scale);
+            const offsetLeftScaled = Math.round(brickOffsetLeft * scale);
+            const totalPadding = (config.cols - 1) * paddingScaled + offsetLeftScaled * 2;
+            let dynamicBrickWidth = Math.floor((logicalWidth - totalPadding) / config.cols);
+            dynamicBrickWidth = Math.max(30, dynamicBrickWidth);
+            const dynamicBrickHeight = Math.max(10, Math.round(15 * scale)); 
+            return { dynamicBrickWidth, dynamicBrickHeight };
+        }
+
+        function initBricks() {
+            const config = levelConfigs[currentLevel] || levelConfigs[5];
+            brickRowCount = config.rows;
+            brickColumnCount = config.cols;
+            bricks = [];
+            totalBricks = 0;
+            bricksDestroyed = 0;
+            const sizes = computeBrickSizes();
+            brickWidth = sizes.dynamicBrickWidth;
+            brickHeight = sizes.dynamicBrickHeight;
+            const offsetTopScaled = Math.round(brickOffsetTop * scale);
+            const offsetLeftScaled = Math.round(brickOffsetLeft * scale);
+            const paddingScaled = Math.round(brickPadding * scale);
+            for (let row = 0; row < brickRowCount; row++) {
+                bricks[row] = [];
+                for (let col = 0; col < brickColumnCount; col++) {
+                    const brickX = col * (brickWidth + paddingScaled) + offsetLeftScaled;
+                    const brickY = row * (brickHeight + paddingScaled) + offsetTopScaled;
+                    bricks[row][col] = {
+                        x: brickX,
+                        y: brickY,
                         status: 1,
-                        health: config.brickHealth 
-                    }; 
-                    totalBricks++; 
-                } 
-            } 
-        } 
-        // Dibujar pelota 
-        function drawBall() { 
-            ctx.beginPath(); 
-            ctx.arc(ballX, ballY, ballRadius, 0, Math.PI * 2); 
-            ctx.fillStyle = "#FF6B6B"; 
-            ctx.fill(); 
-            ctx.strokeStyle = "#FF4444"; 
-            ctx.lineWidth = Math.max(1, 2 * scale); 
-            ctx.stroke(); 
-            ctx.closePath(); 
-        } 
-        // Dibujar raqueta 
-        function drawPaddle() { 
-            ctx.fillStyle = "#4ECDC4"; 
-            ctx.fillRect(paddleX, paddleY, paddleWidth, paddleHeight); 
-            ctx.strokeStyle = "#2BA39F"; 
-            ctx.lineWidth = Math.max(1, 2 * scale); 
-            ctx.strokeRect(paddleX, paddleY, paddleWidth, paddleHeight); 
-        } 
-        // Dibujar ladrillos 
-        function drawBricks() { 
-            const offsetTopScaled = Math.round(brickOffsetTop * scale); 
-            const offsetLeftScaled = Math.round(brickOffsetLeft * scale); 
-            const paddingScaled = Math.round(brickPadding * scale); 
-            for (let row = 0; row < brickRowCount; row++) { 
-                for (let col = 0; col < brickColumnCount; col++) { 
-                    const brick = bricks[row][col]; 
-                    if (brick.status === 1) { 
-                        const brickX = col * (brickWidth + paddingScaled) + offsetLeftScaled; 
-                        const brickY = row * (brickHeight + paddingScaled) + offsetTopScaled; 
-                        brick.x = brickX; 
-                        brick.y = brickY; 
-                        // Colores por fila con degradado 
-                        const colors = ["#FF6B6B", "#FFA500", "#FFD93D", "#6BCB77", "#4ECDC4", "#95E1D3"]; 
-                        const baseColor = colors[row % colors.length]; 
-                        // Cambiar intensidad según la salud 
-                        if (brick.health === 1) { 
-                            ctx.fillStyle = baseColor; 
-                        } else if (brick.health === 2) { 
-                            ctx.fillStyle = baseColor + "CC"; 
-                            // Más oscuro 
-                        } else { 
-                            ctx.fillStyle = baseColor + "99"; 
-                            // Aún más oscuro 
-                        } 
-                        ctx.fillRect(brickX, brickY, brickWidth, brickHeight); 
-                        ctx.strokeStyle = "#fff"; 
-                        ctx.lineWidth = Math.max(1, 1 * scale); 
-                        ctx.strokeRect(brickX, brickY, brickWidth, brickHeight); 
-                        // Mostrar número de salud si tiene más de 1 
-                        if (brick.health > 1) { 
-                            ctx.fillStyle = "#fff"; 
-                            ctx.font = bold ${Math.max(10, Math.round(12 * scale))}px Arial; 
-                            ctx.textAlign = "center"; 
-                            ctx.fillText(brick.health, brickX + brickWidth / 2, brickY + brickHeight / 2 + 4); 
-                        } 
-                    } 
-                } 
-            } 
-        } 
-        // Detección de colisiones 
-        function collisionDetection() { 
-            // Colisión con ladrillos 
-            for (let row = 0; row < brickRowCount; row++) { 
-                for (let col = 0; col < brickColumnCount; col++) { 
-                    const brick = bricks[row][col]; 
-                    if (brick.status === 1) { 
-                        if (ballX > brick.x && ballX < brick.x + brickWidth && ballY > brick.y && ballY < brick.y + brickHeight) { 
-                            brick.health--; 
-                            if (brick.health <= 0) { 
-                                brick.status = 0; 
-                                bricksDestroyed++; 
-                            } 
-                            // Aumentar velocidad gradualmente 
-                            const speedIncrease = 1.02 + (bricksDestroyed / totalBricks) * 0.1; 
-                            const currentSpeed = Math.sqrt(ballDX * ballDX + ballDY * ballDY); 
-                            const newSpeed = Math.min(currentSpeed * speedIncrease, maxBallSpeed * levelConfigs[currentLevel].speedMultiplier * scale); 
-                            const angle = Math.atan2(ballDY, ballDX); 
-                            ballDX = Math.cos(angle) * newSpeed; 
-                            ballDY = Math.sin(angle) * newSpeed; 
-                            ballDY = -ballDY; 
-                            score += 10 * brick.health; 
-                            document.getElementById('score').textContent = score; 
-                        }
+                        health: config.brickHealth
+                    };
+                    totalBricks++;
+                }
+            }
+        }
+
+        function resetBall() {
+            ballX = logicalWidth / 2;
+            ballY = logicalHeight - 60 * scale;
+            const config = levelConfigs[currentLevel] || levelConfigs[5];
+            
+            // ⭐️ MEJORA 1: Velocidad inicial aumentada de 3 a 4
+            const baseSpeed = 4 * config.speedMultiplier; 
+            
+            ballSpeed = baseSpeed;
+            const angle = (Math.random() * Math.PI / 3) - (Math.PI / 6);
+            const dir = Math.random() > 0.5 ? 1 : -1;
+            ballDX = Math.cos(angle) * baseSpeed * dir;
+            ballDY = -Math.abs(Math.sin(angle) * baseSpeed);
+            paddleX = (logicalWidth - paddleWidth) / 2;
+        }
+
+
+        // --- Funciones de Dibujo ---
+        function drawBall() {
+            ctx.beginPath();
+            ctx.arc(ballX, ballY, ballRadius, 0, Math.PI * 2);
+            ctx.fillStyle = "#FF6B6B";
+            ctx.fill();
+            ctx.strokeStyle = "#FF4444";
+            ctx.lineWidth = Math.max(1, 2 * scale);
+            ctx.stroke();
+            ctx.closePath();
+        }
+
+        function drawPaddle() {
+            ctx.fillStyle = "#4ECDC4";
+            ctx.fillRect(paddleX, paddleY, paddleWidth, paddleHeight);
+            ctx.strokeStyle = "#2BA39F";
+            ctx.lineWidth = Math.max(1, 2 * scale);
+            ctx.strokeRect(paddleX, paddleY, paddleWidth, paddleHeight);
+        }
+
+        function drawBricks() {
+            for (let row = 0; row < brickRowCount; row++) {
+                for (let col = 0; col < brickColumnCount; col++) {
+                    const brick = bricks[row][col];
+                    if (!brick || brick.status !== 1) continue;
+                    
+                    const colors = ["#FF6B6B", "#FFA500", "#FFD93D", "#6BCB77", "#4ECDC4", "#95E1D3"];
+                    const baseColor = colors[row % colors.length];
+                    
+                    if (brick.health === 1) {
+                        ctx.fillStyle = baseColor;
+                    } else if (brick.health === 2) {
+                        ctx.fillStyle = baseColor + "CC";
+                    } else {
+                        ctx.fillStyle = baseColor + "99";
+                    }
+
+                    ctx.fillRect(brick.x, brick.y, brickWidth, brickHeight);
+                    ctx.strokeStyle = "#fff";
+                    ctx.lineWidth = Math.max(1, 1 * scale);
+                    ctx.strokeRect(brick.x, brick.y, brickWidth, brickHeight);
+                    if (brick.health > 1) {
+                        ctx.fillStyle = "#fff";
+                        ctx.font = `bold ${Math.max(10, Math.round(12 * scale))}px Arial`;
+                        ctx.textAlign = "center";
+                        ctx.textBaseline = "middle";
+                        ctx.fillText(String(brick.health), brick.x + brickWidth / 2, brick.y + brickHeight / 2);
                     }
                 }
             }
-            // Colisión con raqueta 
-            if (ballY + ballRadius >= paddleY && ballY - ballRadius <= paddleY + paddleHeight && ballX >= paddleX && ballX <= paddleX + paddleWidth) { 
-                // Reflejar según donde golpee la raqueta 
-                const hitPos = (ballX - paddleX) / paddleWidth; 
-                const config = levelConfigs[currentLevel] || levelConfigs[5]; 
-                ballDX = (hitPos - 0.5) * 6 * config.speedMultiplier * scale; 
-                ballDY = -ballDY; 
-            }
         }
-        // Movimiento de la pelota 
-        function ballMovement() { 
-            ballX += ballDX; 
-            ballY += ballDY; 
-            // Colisión con paredes laterales 
-            if (ballX + ballRadius > logicalWidth || ballX - ballRadius < 0) { 
-                ballDX = -ballDX; 
-                ballX = Math.max(ballRadius, Math.min(logicalWidth - ballRadius, ballX));
-            }
-            // Colisión con techo 
-            if (ballY - ballRadius < 0) { 
-                ballDY = -ballDY; 
-                ballY = ballRadius; 
-            }
-            // Pelota fuera de pantalla (abajo) 
-            if (ballY - ballRadius > logicalHeight) { 
-                lives--; 
-                document.getElementById('lives').textContent = lives; 
-                if (lives <= 0) { 
-                    endGame(); 
-                } else { 
-                    resetBall(); 
+
+
+        // --- Colisiones ---
+        
+        function circleRectCollision(cx, cy, r, rx, ry, rw, rh) {
+            const closestX = Math.max(rx, Math.min(cx, rx + rw));
+            const closestY = Math.max(ry, Math.min(cy, ry + rh));
+            const dx = cx - closestX;
+            const dy = cy - closestY;
+            return (dx * dx + dy * dy) <= (r * r);
+        }
+
+        function collisionDetection() {
+            // Colisión con ladrillos
+            for (let row = 0; row < brickRowCount; row++) {
+                for (let col = 0; col < brickColumnCount; col++) {
+                    const brick = bricks[row][col];
+                    if (!brick || brick.status !== 1) continue;
+                    if (circleRectCollision(ballX, ballY, ballRadius, brick.x, brick.y, brickWidth, brickHeight)) {
+                        const prevHealth = brick.health;
+                        brick.health--;
+                        if (brick.health <= 0) {
+                            brick.status = 0;
+                            bricksDestroyed++;
+                        }
+                        score += 10 * prevHealth;
+                        document.getElementById('score').textContent = score;
+
+                        // Resolver rebote
+                        const brickCenterX = brick.x + brickWidth / 2;
+                        const brickCenterY = brick.y + brickHeight / 2;
+                        const diffX = Math.abs(ballX - brickCenterX) / (brickWidth / 2);
+                        const diffY = Math.abs(ballY - brickCenterY) / (brickHeight / 2);
+
+                        if (diffX > diffY) {
+                            ballDX = -ballDX; // Colisión lateral
+                        } else {
+                            ballDY = -ballDY; // Colisión superior/inferior
+                        }
+
+                        // Aumentar velocidad con tope
+                        const currentSpeed = Math.sqrt(ballDX * ballDX + ballDY * ballDY) || 1;
+                        const speedIncrease = 1.02 + (bricksDestroyed / Math.max(1, totalBricks)) * 0.1;
+                        const config = levelConfigs[currentLevel] || levelConfigs[5];
+                        const newSpeed = Math.min(currentSpeed * speedIncrease, maxBallSpeed * config.speedMultiplier);
+                        const ang = Math.atan2(ballDY, ballDX);
+                        ballDX = Math.cos(ang) * newSpeed;
+                        ballDY = Math.sin(ang) * newSpeed;
+                    }
                 }
             }
-        } 
-        // Resetear pelota 
-        function resetBall() { 
-            ballX = logicalWidth / 2;
-            ballY = logicalHeight - 60 * scale; 
-            const config = levelConfigs[currentLevel] || levelConfigs[5];
-            ballSpeed = 3 * config.speedMultiplier * scale; 
-            ballDX = (Math.random() > 0.5 ? 1 : -1) * ballSpeed; 
-            ballDY = -ballSpeed; 
-            paddleX = (logicalWidth - paddleWidth) / 2; 
-        }
-        // Movimiento de la raqueta 
-        function paddleMovement() { 
-            if (rightPressed && paddleX < logicalWidth - paddleWidth) { 
-                paddleX += paddleSpeed; 
-            } if (leftPressed && paddleX > 0) {
-                paddleX -= paddleSpeed; 
+
+            // Colisión con raqueta (MEJORADO el ángulo de rebote)
+            if (ballY + ballRadius >= paddleY && ballY - ballRadius <= paddleY + paddleHeight &&
+                ballX >= paddleX && ballX <= paddleX + paddleWidth) {
+                
+                if (ballDY > 0) { // Solo rebotar si la pelota va hacia abajo
+                    // Calcular posición de impacto relativo [-1, 1]
+                    const relativeHit = ballX - (paddleX + paddleWidth / 2);
+                    const normalizedHit = relativeHit / (paddleWidth / 2);
+
+                    // ⭐️ MEJORA 3: Aumentamos el ángulo máximo de rebote de 60° a 75° (PI/3 a 75*PI/180)
+                    const maxBounceAngle = (75 * Math.PI) / 180; 
+                    const angle = normalizedHit * maxBounceAngle;
+
+                    const config = levelConfigs[currentLevel] || levelConfigs[5];
+                    const speed = Math.sqrt(ballDX * ballDX + ballDY * ballDY) || (4 * config.speedMultiplier);
+
+                    // Componente horizontal (seno) será más fuerte en los bordes
+                    ballDX = speed * Math.sin(angle);
+                    // Aseguramos que la componente Y siempre sea negativa (hacia arriba)
+                    ballDY = -Math.abs(speed * Math.cos(angle)); 
+                }
             }
         }
-        // Limpiar canvas 
-        function cleanCanvas() { 
-            ctx.fillStyle = "#000"; 
+
+
+        // --- Lógica del Juego ---
+
+        function ballMovement() {
+            ballX += ballDX;
+            ballY += ballDY;
+            if (ballX + ballRadius > logicalWidth) {
+                ballDX = -Math.abs(ballDX);
+                ballX = logicalWidth - ballRadius;
+            } else if (ballX - ballRadius < 0) {
+                ballDX = Math.abs(ballDX);
+                ballX = ballRadius;
+            }
+            if (ballY - ballRadius < 0) {
+                ballDY = Math.abs(ballDY);
+                ballY = ballRadius;
+            }
+            if (ballY - ballRadius > logicalHeight) {
+                lives--;
+                document.getElementById('lives').textContent = lives;
+                if (lives <= 0) {
+                    endGame();
+                } else {
+                    resetBall();
+                }
+            }
+        }
+
+        function paddleMovement() {
+            if (rightPressed && paddleX < logicalWidth - paddleWidth) {
+                paddleX += paddleSpeed;
+            }
+            if (leftPressed && paddleX > 0) {
+                paddleX -= paddleSpeed;
+            }
+            paddleX = Math.min(Math.max(paddleX, 0), logicalWidth - paddleWidth);
+        }
+
+        function cleanCanvas() {
+            ctx.fillStyle = "#000";
             ctx.fillRect(0, 0, logicalWidth, logicalHeight);
-        } 
-        // Eventos del teclado 
-        function initEvents() { 
-            // Keyboard events 
-            document.addEventListener("keydown", keydownHandler); 
-            document.addEventListener("keyup", keyupHandler); 
-            // Pointer events for mouse & touch on canvas (drag to move) 
-            let pointerId = null; 
-            let pointerActive = false; 
-            function toLogicalX(clientX) { 
-                const rect = canvas.getBoundingClientRect(); 
-                const x = clientX - rect.left; 
-                return (x / rect.width) * logicalWidth;
-            } 
-            canvas.addEventListener('pointerdown', (ev) => { 
-                pointerId = ev.pointerId; 
-                pointerActive = true;
-                if (canvas.setPointerCapture) canvas.setPointerCapture(ev.pointerId); 
-                const lx = toLogicalX(ev.clientX); 
-                paddleX = Math.min(Math.max(lx - paddleWidth / 2, 0), logicalWidth - paddleWidth); 
-                ev.preventDefault(); 
-            }); 
-            canvas.addEventListener('pointermove', (ev) => { 
-                if (!pointerActive || ev.pointerId !== pointerId) return; 
-                const lx = toLogicalX(ev.clientX); 
-                paddleX = Math.min(Math.max(lx - paddleWidth / 2, 0), logicalWidth - paddleWidth); 
-                ev.preventDefault(); 
-            }); 
-            canvas.addEventListener('pointerup', (ev) => { 
-                if (ev.pointerId === pointerId) { 
-                    pointerActive = false; pointerId = null; 
-                    if (canvas.releasePointerCapture) canvas.releasePointerCapture(ev.pointerId); 
-                } 
-                ev.preventDefault(); 
-            }); 
-            canvas.addEventListener('pointercancel', () => { 
-                pointerActive = false; 
-                pointerId = null; 
-            }); 
-            // Mobile on-screen controls buttons 
-            const btnLeft = document.getElementById('mobileLeft'); 
-            const btnRight = document.getElementById('mobileRight'); 
-            const btnPause = document.getElementById('mobilePause'); 
-            if (btnLeft && btnRight && btnPause) { 
-                // pointerdown/up for sustained movement 
-                btnLeft.addEventListener('pointerdown', () => { 
-                    leftPressed = true; 
-                });
-                btnLeft.addEventListener('pointerup', () => { 
-                    leftPressed = false; 
-                });
-                btnLeft.addEventListener('pointercancel', () => {
-                    leftPressed = false;
-                }); 
-                btnLeft.addEventListener('pointerleave', () => { 
-                    leftPressed = false; 
-                }); 
-                btnLeft.addEventListener('touchstart', () => { 
-                    leftPressed = true; 
-                }, {passive:false}); 
-                btnLeft.addEventListener('touchend', () => { 
-                    leftPressed = false; 
-                }); 
-                btnRight.addEventListener('pointerdown', () => { 
-                    rightPressed = true; 
-                });
-                btnRight.addEventListener('pointerup', () => { 
-                    rightPressed = false; 
-                });
-                btnRight.addEventListener('pointercancel', () => { 
-                    rightPressed = false; 
-                });
-                btnRight.addEventListener('pointerleave', () => { 
-                    rightPressed = false; 
-                }); 
-                btnRight.addEventListener('touchstart', () => { 
-                    rightPressed = true; 
-                }, {passive:false}); 
-                btnRight.addEventListener('touchend', () => { 
-                    rightPressed = false; 
-                }); 
-                btnPause.addEventListener('click', () => {
-                    isPaused = !isPaused; 
-                }); 
-            } 
-            function keydownHandler(e) { 
-                const key = e.key; 
-                if (key === "ArrowRight" || key === "d" || key === "D") { 
-                    rightPressed = true; 
-                } else if (key === "ArrowLeft" || key === "a" || key === "A") { 
-                    leftPressed = true;
-                } else if (key === " ") { e.preventDefault(); 
-                    if (isGameRunning) { 
-                        isPaused = !isPaused; 
-                    } 
-                }
-            }
-            function keyupHandler(e) { 
-                const key = e.key; 
-                if (key === "ArrowRight" || key === "d" || key === "D") { 
-                    rightPressed = false; 
-                } else if (key === "ArrowLeft" || key === "a" || key === "A") { 
-                    leftPressed = false; 
-                } 
-            } 
-        } 
-        // Verificar victoria 
-        function checkWin() { 
-            return bricksDestroyed === totalBricks; 
-        } 
-        // Game Over 
-        function endGame() { 
-            isGameRunning = false; 
-            document.getElementById('gameOverLevel').textContent = currentLevel; 
-            document.getElementById('gameOverScore').textContent = score; 
-            document.getElementById('gameOverScreen').style.display = 'flex'; 
-        } 
-        // Victoria 
-        function winLevel() { 
-            isGameRunning = false; 
-            document.getElementById('winLevel').textContent = currentLevel; 
-            document.getElementById('winScore').textContent = score; 
-            document.getElementById('winScreen').style.display = 'flex'; 
-        } // Siguiente nivel 
-        function nextLevel() { 
-            if (currentLevel < 5) { 
-                currentLevel++; 
-                document.getElementById('levelNumber').textContent = currentLevel; 
-                resetBall(); 
-                initBricks(); 
-                lives = 3; 
-                document.getElementById('lives').textContent = lives; 
-                document.getElementById('winScreen').style.display = 'none'; 
-                isGameRunning = true; isPaused = false; 
-                // Ensure win screen next button is configured for subsequent levels 
-                const btnNext = document.getElementById('btnNext'); 
-                if (btnNext) { 
-                    btnNext.textContent = 'Siguiente Nivel'; 
-                    btnNext.onclick = nextLevel; 
-                } 
-            } else { 
-                // Completed all levels: show the victory screen as final 
-                document.getElementById('winLevel').textContent = currentLevel; 
-                document.getElementById('winScore').textContent = score; 
-                // Update the primary button to restart the game 
-                const btnNext = document.getElementById('btnNext'); 
-                if (btnNext) {
-                    btnNext.textContent = 'Reiniciar'; 
-                    btnNext.onclick = resetGame; 
-                }
-                document.getElementById('winScreen').style.display = 'flex'; 
-                isGameRunning = false; 
-            } 
         }
-        // Menú principal 
-        function mainMenu() { 
-            currentLevel = 1; 
-            resetGame(); 
-        } 
-        // Resetear juego 
-        function resetGame() { 
-            score = 0; 
-            lives = 3; 
-            currentLevel = 1; 
-            document.getElementById('score').textContent = score; 
-            document.getElementById('lives').textContent = lives; 
-            document.getElementById('levelNumber').textContent = currentLevel;
-            document.getElementById('gameOverScreen').style.display = 'none'; 
-            document.getElementById('winScreen').style.display = 'none'; 
-            initBricks(); 
-            resetBall(); 
-            isGameRunning = true;
-            isPaused = false; 
-        }
-        // Dibujar texto de pausa 
-        function drawPauseText() { 
+
+        function drawPauseText() {
             if (isPaused) {
                 ctx.fillStyle = "rgba(0, 0, 0, 0.7)";
                 ctx.fillRect(0, 0, logicalWidth, logicalHeight);
-                ctx.fillStyle = "#fff"; 
-                ctx.font = ${Math.max(18, Math.round(30 * scale))}px Arial; 
-                ctx.textAlign = "center"; 
-                ctx.fillText("PAUSADO", logicalWidth / 2, logicalHeight / 2); 
-                ctx.font = ${Math.max(12, Math.round(16 * scale))}px Arial; 
-                ctx.fillText("Presiona ESPACIO para continuar", logicalWidth / 2, logicalHeight / 2 + 40 * scale); 
-            } 
+                ctx.fillStyle = "#fff";
+                ctx.font = `${Math.max(18, Math.round(30 * scale))}px Arial`;
+                ctx.textAlign = "center";
+                ctx.textBaseline = "middle";
+                ctx.fillText("PAUSADO", logicalWidth / 2, logicalHeight / 2);
+                ctx.font = `${Math.max(12, Math.round(16 * scale))}px Arial`;
+                ctx.fillText("Presiona ESPACIO para continuar", logicalWidth / 2, logicalHeight / 2 + 40 * scale);
+            }
         }
-        // Loop de dibujo principal 
-        function draw() { 
-            cleanCanvas(); 
-            drawBricks(); 
-            drawBall(); 
-            drawPaddle();
-            if (isGameRunning && !isPaused) { 
-                collisionDetection(); 
-                ballMovement(); 
+
+        function checkWin() {
+            return bricksDestroyed === totalBricks;
+        }
+
+        function endGame() {
+            isGameRunning = false;
+            document.getElementById('gameOverLevel').textContent = currentLevel;
+            document.getElementById('gameOverScore').textContent = score;
+            document.getElementById('gameOverScreen').style.display = 'flex';
+        }
+
+        function winLevel() {
+            isGameRunning = false;
+            document.getElementById('winLevel').textContent = currentLevel;
+            document.getElementById('winScore').textContent = score;
+            document.getElementById('winScreen').style.display = 'flex';
+            const btnNext = document.getElementById('btnNext');
+            if (currentLevel >= 5) {
+                btnNext.textContent = '¡Juego Completado! Reiniciar';
+                btnNext.onclick = resetGame;
+            } else {
+                btnNext.textContent = 'Siguiente Nivel';
+                btnNext.onclick = nextLevel;
+            }
+        }
+
+        window.nextLevel = function() {
+            if (currentLevel < 5) {
+                currentLevel++;
+                document.getElementById('levelNumber').textContent = currentLevel;
+                resetBall();
+                initBricks();
+                lives = 3;
+                document.getElementById('lives').textContent = lives;
+                document.getElementById('winScreen').style.display = 'none';
+                isGameRunning = true; isPaused = false;
+            } else {
+                 resetGame();
+            }
+        }
+
+        window.mainMenu = function() {
+            currentLevel = 1;
+            resetGame();
+        }
+
+        window.resetGame = function() {
+            score = 0;
+            lives = 3;
+            currentLevel = 1;
+            document.getElementById('score').textContent = score;
+            document.getElementById('lives').textContent = lives;
+            document.getElementById('levelNumber').textContent = currentLevel;
+            document.getElementById('gameOverScreen').style.display = 'none';
+            document.getElementById('winScreen').style.display = 'none';
+            initBricks();
+            resetBall();
+            isGameRunning = true;
+            isPaused = false;
+        }
+
+        // --- Eventos ---
+
+        function initEvents() {
+            document.addEventListener("keydown", keydownHandler);
+            document.addEventListener("keyup", keyupHandler);
+
+            // Pointer events for mouse & touch on canvas (drag to move)
+            let pointerId = null;
+            let pointerActive = false;
+            function toLogicalX(clientX) {
+                const rect = canvas.getBoundingClientRect();
+                const x = clientX - rect.left;
+                return (x / rect.width) * logicalWidth;
+            }
+            canvas.addEventListener('pointerdown', (ev) => {
+                pointerId = ev.pointerId;
+                pointerActive = true;
+                if (canvas.setPointerCapture) canvas.setPointerCapture(ev.pointerId);
+                const lx = toLogicalX(ev.clientX);
+                paddleX = Math.min(Math.max(lx - paddleWidth / 2, 0), logicalWidth - paddleWidth);
+                ev.preventDefault();
+            });
+            canvas.addEventListener('pointermove', (ev) => {
+                if (!pointerActive || ev.pointerId !== pointerId) return;
+                const lx = toLogicalX(ev.clientX);
+                paddleX = Math.min(Math.max(lx - paddleWidth / 2, 0), logicalWidth - paddleWidth);
+                ev.preventDefault();
+            });
+            canvas.addEventListener('pointerup', (ev) => {
+                if (ev.pointerId === pointerId) {
+                    pointerActive = false; pointerId = null;
+                    if (canvas.releasePointerCapture) canvas.releasePointerCapture(ev.pointerId);
+                }
+                ev.preventDefault();
+            });
+            canvas.addEventListener('pointercancel', () => {
+                pointerActive = false;
+                pointerId = null;
+            });
+
+            // Mobile on-screen controls buttons
+            const btnLeft = document.getElementById('mobileLeft');
+            const btnRight = document.getElementById('mobileRight');
+            const btnPause = document.getElementById('mobilePause');
+            if (btnLeft && btnRight && btnPause) {
+                btnLeft.addEventListener('pointerdown', () => { leftPressed = true; });
+                btnLeft.addEventListener('pointerup', () => { leftPressed = false; });
+                btnLeft.addEventListener('pointercancel', () => { leftPressed = false; });
+                btnLeft.addEventListener('pointerleave', () => { leftPressed = false; });
+
+                btnRight.addEventListener('pointerdown', () => { rightPressed = true; });
+                btnRight.addEventListener('pointerup', () => { rightPressed = false; });
+                btnRight.addEventListener('pointercancel', () => { rightPressed = false; });
+                btnRight.addEventListener('pointerleave', () => { rightPressed = false; });
+
+                btnPause.addEventListener('click', () => {
+                    isPaused = !isPaused;
+                });
+            }
+
+            function keydownHandler(e) {
+                const key = e.key;
+                const code = e.code;
+                if (key === "ArrowRight" || key === "d" || key === "D") {
+                    rightPressed = true;
+                } else if (key === "ArrowLeft" || key === "a" || key === "A") {
+                    leftPressed = true;
+                } else if (code === "Space") {
+                    e.preventDefault();
+                    if (isGameRunning) {
+                        isPaused = !isPaused;
+                    }
+                }
+            }
+
+            function keyupHandler(e) {
+                const key = e.key;
+                if (key === "ArrowRight" || key === "d" || key === "D") {
+                    rightPressed = false;
+                } else if (key === "ArrowLeft" || key === "a" || key === "A") {
+                    leftPressed = false;
+                }
+            }
+        }
+
+
+        // --- Bucle principal ---
+
+        function draw() {
+            if (isGameRunning && !isPaused) {
+                ballMovement();
+                collisionDetection();
                 paddleMovement();
-                if (checkWin()) { 
-                    winLevel(); 
-                } 
-            } 
-            drawPauseText(); 
-            window.requestAnimationFrame(draw); 
+                if (checkWin()) {
+                    winLevel();
+                }
+            }
+
+            cleanCanvas();
+            drawBricks();
+            drawBall();
+            drawPaddle();
+            drawPauseText();
+
+            window.requestAnimationFrame(draw);
         }
-        // Inicializar juego 
-        initBricks(); 
-        resetBall(); 
-        initEvents(); 
+
+        // Inicializar
+        resizeCanvas();
+        window.addEventListener('resize', () => {
+            resizeCanvas();
+            resetBall();
+            initBricks();
+        });
+        initBricks();
+        resetBall();
+        initEvents();
         draw();
     </script>
 
 </body>
-
 </html>
